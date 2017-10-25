@@ -5,6 +5,7 @@ Bug #63438 (Strange behavior with nested rendering)
 --INI--
 yaf.use_spl_autoload=1
 yaf.lowcase_path=0
+yaf.use_namespace=0
 --FILE--
 <?php
 
@@ -44,6 +45,7 @@ print (view('outer.phtml'));
 1 2 3
 1 2 3
 1 2 3
-1 
-Fatal error: Call to undefined function undefined_function() in %sinner.phtml on line %d
+
+Fatal error: Uncaught Error: Call to undefined function undefined_function() in %sinner.phtml:%d
+%a
 done

@@ -14,8 +14,6 @@
   +----------------------------------------------------------------------+
 */
 
-/* $Id: yaf_plugin.c 329197 2013-01-18 05:55:37Z laruence $ */
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -35,57 +33,55 @@ ZEND_BEGIN_ARG_INFO_EX(plugin_arg, 0, 0, 2)
 	ZEND_ARG_OBJ_INFO(0, response, Yaf_Response_Abstract, 0)
 ZEND_END_ARG_INFO()
 
-#ifdef YAF_HAVE_NAMESPACE
 ZEND_BEGIN_ARG_INFO_EX(plugin_arg_ns, 0, 0, 2)
 	ZEND_ARG_OBJ_INFO(0, request, Yaf\\Request_Abstract, 0)
 	ZEND_ARG_OBJ_INFO(0, response, Yaf\\Response_Abstract, 0)
 ZEND_END_ARG_INFO()
-#endif
 /* }}} */
 
-/** {{{ proto public Yaf_Plugin::routerStartup(Yaf_Request_Abstract $request, Yaf_Response_Abstarct $response)
+/** {{{ proto public Yaf_Plugin::routerStartup(Yaf_Request_Abstract $request, Yaf_Response_Abstract $response)
 */
 PHP_METHOD(yaf_plugin, routerStartup) {
 	RETURN_TRUE;
 }
 /* }}} */
 
-/** {{{ proto public Yaf_Plugin::routerShutdown(Yaf_Request_Abstract $request, Yaf_Response_Abstarct $response)
+/** {{{ proto public Yaf_Plugin::routerShutdown(Yaf_Request_Abstract $request, Yaf_Response_Abstract $response)
 */
 PHP_METHOD(yaf_plugin, routerShutdown) {
 	RETURN_TRUE;
 }
 /* }}} */
 
-/** {{{ proto public Yaf_Plugin::dispatchLoopStartup(Yaf_Request_Abstract $request, Yaf_Response_Abstarct $response)
+/** {{{ proto public Yaf_Plugin::dispatchLoopStartup(Yaf_Request_Abstract $request, Yaf_Response_Abstract $response)
 */
 PHP_METHOD(yaf_plugin, dispatchLoopStartup) {
 	RETURN_TRUE;
 }
 /* }}} */
 
-/** {{{ proto public Yaf_Plugin::preDispatch(Yaf_Request_Abstract $request, Yaf_Response_Abstarct $response)
+/** {{{ proto public Yaf_Plugin::preDispatch(Yaf_Request_Abstract $request, Yaf_Response_Abstract $response)
 */
 PHP_METHOD(yaf_plugin, preDispatch) {
 	RETURN_TRUE;
 }
 /* }}} */
 
-/** {{{ proto public Yaf_Plugin::postDispatch(Yaf_Request_Abstract $request, Yaf_Response_Abstarct $response)
+/** {{{ proto public Yaf_Plugin::postDispatch(Yaf_Request_Abstract $request, Yaf_Response_Abstract $response)
 */
 PHP_METHOD(yaf_plugin, postDispatch) {
 	RETURN_TRUE;
 }
 /* }}} */
 
-/** {{{ proto public Yaf_Plugin::dispatchLoopShutdown(Yaf_Request_Abstract $request, Yaf_Response_Abstarct $response)
+/** {{{ proto public Yaf_Plugin::dispatchLoopShutdown(Yaf_Request_Abstract $request, Yaf_Response_Abstract $response)
 */
 PHP_METHOD(yaf_plugin, dispatchLoopShutdown) {
 	RETURN_TRUE;
 }
 /* }}} */
 
-/** {{{ proto public Yaf_Plugin::preResponse(Yaf_Request_Abstract $request, Yaf_Response_Abstarct $response)
+/** {{{ proto public Yaf_Plugin::preResponse(Yaf_Request_Abstract $request, Yaf_Response_Abstract $response)
 */
 PHP_METHOD(yaf_plugin, preResponse) {
 	RETURN_TRUE;
@@ -105,7 +101,6 @@ zend_function_entry yaf_plugin_methods[] = {
 	{NULL, NULL, NULL}
 };
 
-#ifdef YAF_HAVE_NAMESPACE
 zend_function_entry yaf_plugin_methods_ns[] = {
 	PHP_ME(yaf_plugin, routerStartup,  		 plugin_arg_ns, ZEND_ACC_PUBLIC)
 	PHP_ME(yaf_plugin, routerShutdown,  		 plugin_arg_ns, ZEND_ACC_PUBLIC)
@@ -116,7 +111,6 @@ zend_function_entry yaf_plugin_methods_ns[] = {
 	PHP_ME(yaf_plugin, preResponse, 			 plugin_arg_ns, ZEND_ACC_PUBLIC)
 	{NULL, NULL, NULL}
 };
-#endif
 /* }}} */
 
 /** {{{ YAF_STARTUP_FUNCTION
@@ -124,7 +118,7 @@ zend_function_entry yaf_plugin_methods_ns[] = {
 YAF_STARTUP_FUNCTION(plugin) {
 	zend_class_entry ce;
 	YAF_INIT_CLASS_ENTRY(ce, "Yaf_Plugin_Abstract", "Yaf\\Plugin_Abstract", namespace_switch(yaf_plugin_methods));
-	yaf_plugin_ce = zend_register_internal_class_ex(&ce, NULL, NULL TSRMLS_CC);
+	yaf_plugin_ce = zend_register_internal_class_ex(&ce, NULL);
 	yaf_plugin_ce->ce_flags |= ZEND_ACC_EXPLICIT_ABSTRACT_CLASS;
 
 	return SUCCESS;

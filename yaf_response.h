@@ -14,15 +14,12 @@
   +----------------------------------------------------------------------+
 */
 
-/* $Id: yaf_response.h 329197 2013-01-18 05:55:37Z laruence $ */
-
 #ifndef PHP_YAF_RESPONSE_H
 #define PHP_YAF_RESPONSE_H
 
 #define YAF_RESPONSE_PROPERTY_NAME_HEADER			"_header"
 #define YAF_RESPONSE_PROPERTY_NAME_BODY				"_body"
 #define YAF_RESPONSE_PROPERTY_NAME_HEADEREXCEPTION	"_sendheader"
-#define YAF_RESPONSE_PROPERTY_NAME_RESPONSECODE		"_response_code"
 #define YAF_RESPONSE_PROPERTY_NAME_DEFAULTBODY		"content"
 #define YAF_RESPONSE_PROPERTY_NAME_DEFAULTBODYNAME  "DEFAULT_BODY"
 
@@ -34,11 +31,11 @@ extern zend_class_entry *yaf_response_ce;
 extern zend_class_entry *yaf_response_http_ce;
 extern zend_class_entry *yaf_response_cli_ce;
 
-yaf_response_t * yaf_response_instance(yaf_response_t *this_ptr, char *sapi_name TSRMLS_DC);
-int yaf_response_alter_body(yaf_response_t *response, char *name, int name_len, char *body, long body_len, int flag TSRMLS_DC);
-int yaf_response_send(yaf_response_t *response TSRMLS_DC);
-int yaf_response_set_redirect(yaf_response_t *response, char *url, int len TSRMLS_DC);
-int yaf_response_clear_body(yaf_response_t *response, char *name, uint name_len TSRMLS_DC);
+yaf_response_t * yaf_response_instance(yaf_response_t *this_ptr, char *sapi_name);
+int yaf_response_alter_body(yaf_response_t *response, zend_string *name, zend_string *body, int flag);
+int yaf_response_send(yaf_response_t *response);
+int yaf_response_set_redirect(yaf_response_t *response, char *url, int len);
+int yaf_response_clear_body(yaf_response_t *response, zend_string *name);
 
 YAF_STARTUP_FUNCTION(response);
 

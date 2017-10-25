@@ -14,12 +14,17 @@
   +----------------------------------------------------------------------+
 */
 
-/* $Id: yaf_response.h 329002 2013-01-07 12:55:53Z laruence $ */
 
 #ifndef PHP_YAF_RESPONSE_HTTP_H
 #define PHP_YAF_RESPONSE_HTTP_H
 
+#define YAF_RESPONSE_PROPERTY_NAME_RESPONSECODE   "_response_code"
+
 extern zend_class_entry *yaf_response_http_ce;
+
+int yaf_response_alter_header(yaf_response_t *response, zend_string *name, char *value, long value_len, uint rep);
+zval * yaf_response_get_header(yaf_response_t *response, zend_string *name);
+int yaf_response_clear_header(yaf_response_t *response, zend_string *name);
 
 YAF_STARTUP_FUNCTION(response_http);
 

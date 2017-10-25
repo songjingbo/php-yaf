@@ -14,8 +14,6 @@
   +----------------------------------------------------------------------+
 */
 
-/* $Id: yaf_router.c 329200 2013-01-18 06:26:40Z laruence $ */
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -41,152 +39,120 @@
 
 zend_class_entry *yaf_router_ce;
 
-/** {{{ yaf_router_t * yaf_router_instance(yaf_router_t *this_ptr TSRMLS_DC)
+/** {{{ yaf_router_t * yaf_router_instance(yaf_router_t *this_ptr)
  */
-yaf_router_t * yaf_router_instance(yaf_router_t *this_ptr TSRMLS_DC) {
-	zval 			*routes;
-	yaf_router_t 	*instance;
-	yaf_route_t		*route;
+yaf_router_t * yaf_router_instance(yaf_router_t *this_ptr) {
+	zval routes;
+	yaf_route_t	route = {{0}};
 
-	if (this_ptr) {
-		instance = this_ptr;
-	} else {
-		MAKE_STD_ZVAL(instance);
-		object_init_ex(instance, yaf_router_ce);
+    if (Z_ISUNDEF_P(this_ptr)) {
+		object_init_ex(this_ptr, yaf_router_ce);
 	}
 
-	MAKE_STD_ZVAL(routes);
-	array_init(routes);
-
+	array_init(&routes);
 	if (!YAF_G(default_route)) {
 static_route:
-	    MAKE_STD_ZVAL(route);
-		object_init_ex(route, yaf_route_static_ce);
+		object_init_ex(&route, yaf_route_static_ce);
 	} else {
-		route = yaf_route_instance(NULL, YAF_G(default_route) TSRMLS_CC);
-		if (!route) {
-			php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unable to initialize default route, use %s instead", yaf_route_static_ce->name);
+		(void)yaf_route_instance(&route, YAF_G(default_route));
+		if (Z_TYPE(route) != IS_OBJECT) {
+			php_error_docref(NULL, E_WARNING,
+					"Unable to initialize default route, use %s instead", ZSTR_VAL(yaf_route_static_ce->name));
 			goto static_route;
 		}
 	}
 
-	zend_hash_update(Z_ARRVAL_P(routes), "_default", sizeof("_default"), (void **)&route, sizeof(zval *), NULL);
-	zend_update_property(yaf_router_ce, instance, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTERS), routes TSRMLS_CC);
+	zend_hash_str_update(Z_ARRVAL(routes), "_default", sizeof("_default") - 1, &route);
+	zend_update_property(yaf_router_ce, this_ptr, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTES), &routes);
 	zval_ptr_dtor(&routes);
 
-	return instance;
+	return this_ptr;
 }
 /** }}} */
 
-/** {{{ int yaf_router_route(yaf_router_t *router, yaf_request_t *request TSRMLS_DC)
+/** {{{ int yaf_router_route(yaf_router_t *router, yaf_request_t *request)
 */
-int yaf_router_route(yaf_router_t *router, yaf_request_t *request TSRMLS_DC) {
-	zval 		*routers, *ret;
-	yaf_route_t	**route;
+int yaf_router_route(yaf_router_t *router, yaf_request_t *request) {
+	zval *routers, ret;
+	yaf_route_t	*route;
 	HashTable 	*ht;
+	zend_string *key;
+	zend_long idx;
 
-	routers = zend_read_property(yaf_router_ce, router, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTERS), 1 TSRMLS_CC);
+	routers = zend_read_property(yaf_router_ce, router, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTES), 1, NULL);
 
 	ht = Z_ARRVAL_P(routers);
-	for(zend_hash_internal_pointer_end(ht);
-			zend_hash_has_more_elements(ht) == SUCCESS;
-			zend_hash_move_backwards(ht)) {
 
-		if (zend_hash_get_current_data(ht, (void**)&route) == FAILURE) {
-			continue;
-		}
-
-		zend_call_method_with_1_params(route, Z_OBJCE_PP(route), NULL, "route", &ret, request);
-
-		if (IS_BOOL != Z_TYPE_P(ret) || !Z_BVAL_P(ret)) {
-			zval_ptr_dtor(&ret);
-			continue;
-		} else {
-			char *key;
-			uint len = 0;
-			ulong idx = 0;
-
-			switch(zend_hash_get_current_key_ex(ht, &key, &len, &idx, 0, NULL)) {
-				case HASH_KEY_IS_LONG:
-					zend_update_property_long(yaf_router_ce, router, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_CURRENT_ROUTE), idx TSRMLS_CC);
-					break;
-				case HASH_KEY_IS_STRING:
-					if (len) {
-						zend_update_property_string(yaf_router_ce, router, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_CURRENT_ROUTE), key TSRMLS_CC);
-					}
-					break;
+	ZEND_HASH_REVERSE_FOREACH_KEY_VAL(ht, idx, key, route) {
+		zend_call_method_with_1_params(route, Z_OBJCE_P(route), NULL, "route", &ret, request);
+		if (IS_TRUE == Z_TYPE(ret)) {
+			if (key) {
+				zend_update_property_string(yaf_router_ce,
+						router, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_CURRENT_ROUTE), ZSTR_VAL(key));
+			} else {
+				zend_update_property_long(yaf_router_ce,
+						router, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_CURRENT_ROUTE), idx);
 			}
-			yaf_request_set_routed(request, 1 TSRMLS_CC);
+			yaf_request_set_routed(request, 1);
+			return 1;
+		} else {
 			zval_ptr_dtor(&ret);
-			break;
+			continue;
 		}
-	}
-	return 1;
+	} ZEND_HASH_FOREACH_END();
+
+	return 0;
 }
 /* }}} */
 
-/** {{{ int yaf_router_add_config(yaf_router_t *router, zval *configs TSRMLS_DC)
+/** {{{ int yaf_router_add_config(yaf_router_t *router, zval *configs)
 */
-int yaf_router_add_config(yaf_router_t *router, zval *configs TSRMLS_DC) {
-	zval 		**entry;
-	HashTable 	*ht;
-	yaf_route_t *route;
+int yaf_router_add_config(yaf_router_t *router, zval *configs) {
+	zval 		*entry;
+	yaf_route_t *route, rv;
 
 	if (!configs || IS_ARRAY != Z_TYPE_P(configs)) {
 		return 0;
 	} else {
-		char *key = NULL;
-		uint len = 0;
-		ulong idx = 0;
+		ulong idx;
+		zend_string *key;
 		zval *routes;
 
-		routes = zend_read_property(yaf_router_ce, router, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTERS), 1 TSRMLS_CC);
+		routes = zend_read_property(yaf_router_ce, router, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTES), 1, NULL);
 
-		ht = Z_ARRVAL_P(configs);
-		for(zend_hash_internal_pointer_reset(ht);
-				zend_hash_has_more_elements(ht) == SUCCESS;
-				zend_hash_move_forward(ht)) {
-			if (zend_hash_get_current_data(ht, (void**)&entry) == FAILURE) {
+		ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(configs), idx, key, entry) {
+			if (Z_TYPE_P(entry) != IS_ARRAY) {
 				continue;
 			}
 
-			if (!entry || Z_TYPE_PP(entry) != IS_ARRAY) {
-				continue;
-			}
-
-			route = yaf_route_instance(NULL, *entry TSRMLS_CC);
-			switch (zend_hash_get_current_key_ex(ht, &key, &len, &idx, 0, NULL)) {
-				case HASH_KEY_IS_STRING:
-					if (!route) {
-						php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unable to initialize route named '%s'", key);
-						continue;
-					}
-					zend_hash_update(Z_ARRVAL_P(routes), key, len, (void **)&route, sizeof(zval *), NULL);
-					break;
-				case HASH_KEY_IS_LONG:
-					if (!route) {
-						php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unable to initialize route at index '%ld'", idx);
-						continue;
-					}
-					zend_hash_index_update(Z_ARRVAL_P(routes), idx, (void **)&route, sizeof(zval *), NULL);
-					break;
-				default:
+			ZVAL_UNDEF(&rv);
+			route = yaf_route_instance(&rv, entry);
+			if (key) {
+				if (!route) {
+					php_error_docref(NULL, E_WARNING, "Unable to initialize route named '%s'", ZSTR_VAL(key));
 					continue;
+				}
+				zend_hash_update(Z_ARRVAL_P(routes), key, route);
+			} else {
+				if (!route) {
+					php_error_docref(NULL, E_WARNING, "Unable to initialize route at index '%ld'", idx);
+					continue;
+				}
+				zend_hash_index_update(Z_ARRVAL_P(routes), idx, route);
 			}
-		}
+		} ZEND_HASH_FOREACH_END();
 		return 1;
 	}
 }
 /* }}} */
 
-/** {{{ zval * yaf_router_parse_parameters(char *uri TSRMLS_DC)
+/** {{{ void yaf_router_parse_parameters(char *uri, zval *params)
  */
-zval * yaf_router_parse_parameters(char *uri TSRMLS_DC) {
+void yaf_router_parse_parameters(char *uri, zval *params) {
 	char *key, *ptrptr, *tmp, *value;
-	zval *params, *val;
+	zval val;
 	uint key_len;
 
-	MAKE_STD_ZVAL(params);
 	array_init(params);
 
 	tmp = estrdup(uri);
@@ -194,29 +160,26 @@ zval * yaf_router_parse_parameters(char *uri TSRMLS_DC) {
 	while (key) {
 		key_len = strlen(key);
 		if (key_len) {
-			MAKE_STD_ZVAL(val);
 			value = php_strtok_r(NULL, YAF_ROUTER_URL_DELIMIETER, &ptrptr);
 			if (value && strlen(value)) {
-				ZVAL_STRING(val, value, 1);
+				ZVAL_STRING(&val, value);
 			} else {
-				ZVAL_NULL(val);
+				ZVAL_NULL(&val);
 			}
-			zend_hash_update(Z_ARRVAL_P(params), key, key_len + 1, (void **)&val, sizeof(zval *), NULL);
+			zend_hash_str_update(Z_ARRVAL_P(params), key, key_len, &val);
 		}
 
 		key = php_strtok_r(NULL, YAF_ROUTER_URL_DELIMIETER, &ptrptr);
 	}
 
 	efree(tmp);
-
-	return params;
 }
 /* }}} */
 
 /** {{{ proto public Yaf_Router::__construct(void)
  */
 PHP_METHOD(yaf_router, __construct) {
-	yaf_router_instance(getThis() TSRMLS_CC);
+	yaf_router_instance(getThis());
 }
 /* }}} */
 
@@ -225,10 +188,10 @@ PHP_METHOD(yaf_router, __construct) {
 PHP_METHOD(yaf_router, route) {
 	yaf_request_t *request;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &request) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "z", &request) == FAILURE) {
 		return;
 	} else {
-		RETURN_BOOL(yaf_router_route(getThis(), request TSRMLS_CC));
+		RETURN_BOOL(yaf_router_route(getThis(), request));
 	}
 }
 /* }}} */
@@ -236,29 +199,28 @@ PHP_METHOD(yaf_router, route) {
 /** {{{  proto public Yaf_Router::addRoute(string $name, Yaf_Route_Interface $route)
  */
 PHP_METHOD(yaf_router, addRoute) {
-	char 	   *name;
+	zend_string 	   *name = NULL;
 	zval 	   *routes;
 	yaf_route_t *route;
-	uint	   len = 0;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sz", &name, &len, &route) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "Sz", &name, &route) == FAILURE) {
 		return;
 	}
 
-	if (!len) {
+	if (!name) {
 		RETURN_FALSE;
 	}
 
 	if (IS_OBJECT != Z_TYPE_P(route)
-			|| !instanceof_function(Z_OBJCE_P(route), yaf_route_ce TSRMLS_CC)) {
-		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Expects a %s instance", yaf_route_ce->name);
+			|| !instanceof_function(Z_OBJCE_P(route), yaf_route_ce)) {
+		php_error_docref(NULL, E_WARNING, "Expects a %s instance", ZSTR_VAL(yaf_route_ce->name));
 		RETURN_FALSE;
 	}
 
-	routes = zend_read_property(yaf_router_ce, getThis(), ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTERS), 1 TSRMLS_CC);
+	routes = zend_read_property(yaf_router_ce, getThis(), ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTES), 1, NULL);
 
-	Z_ADDREF_P(route);
-	zend_hash_update(Z_ARRVAL_P(routes), name, len + 1, (void **)&route, sizeof(zval *), NULL);
+	Z_TRY_ADDREF_P(route);
+	zend_hash_update(Z_ARRVAL_P(routes), name, route);
 
 	RETURN_ZVAL(getThis(), 1, 0);
 }
@@ -268,23 +230,26 @@ PHP_METHOD(yaf_router, addRoute) {
  */
 PHP_METHOD(yaf_router, addConfig) {
 	yaf_config_t *config;
-	zval		 *routes;
+	zval *routes;
+	zval *self = getThis();
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &config) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "z", &config) == FAILURE) {
 		return;
 	}
 
-	if (IS_OBJECT == Z_TYPE_P(config) && instanceof_function(Z_OBJCE_P(config), yaf_config_ce TSRMLS_CC)){
-		routes = zend_read_property(yaf_config_ce, config, ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1 TSRMLS_CC);
+	if (IS_OBJECT == Z_TYPE_P(config) && instanceof_function(Z_OBJCE_P(config), yaf_config_ce)){
+		routes = zend_read_property(yaf_config_ce, config, ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1, NULL);
 	} else if (IS_ARRAY == Z_TYPE_P(config)) {
 		routes = config;
 	} else {
-		php_error_docref(NULL TSRMLS_CC, E_WARNING,  "Expect a %s instance or an array, %s given", yaf_config_ce->name, zend_zval_type_name(config));
+		php_error_docref(NULL, E_WARNING,
+				"Expect a %s instance or an array, %s given",
+				ZSTR_VAL(yaf_config_ce->name), zend_zval_type_name(config));
 		RETURN_FALSE;
 	}
 
-	if (yaf_router_add_config(getThis(), routes TSRMLS_CC)) {
-		RETURN_ZVAL(getThis(), 1, 0);
+	if (yaf_router_add_config(self, routes)) {
+		RETURN_ZVAL(self, 1, 0);
 	} else {
 		RETURN_FALSE;
 	}
@@ -294,23 +259,22 @@ PHP_METHOD(yaf_router, addConfig) {
 /** {{{  proto public Yaf_Router::getRoute(string $name)
  */
 PHP_METHOD(yaf_router, getRoute) {
-	char  *name;
-	uint  len;
+	zend_string  *name;
 	zval  *routes;
-	yaf_route_t **route;
+	yaf_route_t *route;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &name, &len) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "S", &name) == FAILURE) {
 		return;
 	}
 
-	if (!len) {
+	if (ZSTR_LEN(name) == 0) {
 		RETURN_FALSE;
 	}
 
-	routes = zend_read_property(yaf_router_ce, getThis(), ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTERS), 1 TSRMLS_CC);
+	routes = zend_read_property(yaf_router_ce, getThis(), ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTES), 1, NULL);
 
-	if (zend_hash_find(Z_ARRVAL_P(routes), name, len + 1, (void **)&route) == SUCCESS) {
-		RETURN_ZVAL(*route, 1, 0);
+	if ((route = zend_hash_find(Z_ARRVAL_P(routes), name)) != NULL) {
+		RETURN_ZVAL(route, 1, 0);
 	}
 
 	RETURN_NULL();
@@ -320,7 +284,8 @@ PHP_METHOD(yaf_router, getRoute) {
 /** {{{  proto public Yaf_Router::getRoutes(void)
  */
 PHP_METHOD(yaf_router, getRoutes) {
-	zval * routes = zend_read_property(yaf_router_ce, getThis(), ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTERS), 1 TSRMLS_CC);
+	zval *routes = zend_read_property(yaf_router_ce,
+			getThis(), ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTES), 1, NULL);
 	RETURN_ZVAL(routes, 1, 0);
 }
 /* }}} */
@@ -328,21 +293,21 @@ PHP_METHOD(yaf_router, getRoutes) {
 /** {{{ proto public Yaf_Router::isModuleName(string $name)
  */
 PHP_METHOD(yaf_router, isModuleName) {
-	char *name;
-	uint len;
+	zend_string *name;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &name, &len) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "S", &name) == FAILURE) {
 		return;
 	}
 
-	RETURN_BOOL(yaf_application_is_module_name(name, len TSRMLS_CC));
+	RETURN_BOOL(yaf_application_is_module_name(name));
 }
 /* }}} */
 
 /** {{{  proto public Yaf_Router::getCurrentRoute(void)
  */
 PHP_METHOD(yaf_router, getCurrentRoute) {
-	zval *route = zend_read_property(yaf_router_ce, getThis(), ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_CURRENT_ROUTE), 1 TSRMLS_CC);
+	zval *route = zend_read_property(yaf_router_ce,
+			getThis(), ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_CURRENT_ROUTE), 1, NULL);
 	RETURN_ZVAL(route, 1, 0);
 }
 /* }}} */
@@ -350,13 +315,13 @@ PHP_METHOD(yaf_router, getCurrentRoute) {
 /** {{{ yaf_router_methods
  */
 zend_function_entry yaf_router_methods[] = {
-	PHP_ME(yaf_router, __construct, NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR)
-	PHP_ME(yaf_router, addRoute,  NULL, ZEND_ACC_PUBLIC)
-	PHP_ME(yaf_router, addConfig, NULL, ZEND_ACC_PUBLIC)
-	PHP_ME(yaf_router, route,	 NULL, ZEND_ACC_PUBLIC)
-	PHP_ME(yaf_router, getRoute,  NULL, ZEND_ACC_PUBLIC)
-	PHP_ME(yaf_router, getRoutes, NULL, ZEND_ACC_PUBLIC)
-	PHP_ME(yaf_router, getCurrentRoute, NULL, ZEND_ACC_PUBLIC)
+	PHP_ME(yaf_router, __construct, 	NULL, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
+	PHP_ME(yaf_router, addRoute,  		NULL, ZEND_ACC_PUBLIC)
+	PHP_ME(yaf_router, addConfig, 		NULL, ZEND_ACC_PUBLIC)
+	PHP_ME(yaf_router, route,		NULL, ZEND_ACC_PUBLIC)
+	PHP_ME(yaf_router, getRoute,  		NULL, ZEND_ACC_PUBLIC)
+	PHP_ME(yaf_router, getRoutes, 		NULL, ZEND_ACC_PUBLIC)
+	PHP_ME(yaf_router, getCurrentRoute, 	NULL, ZEND_ACC_PUBLIC)
 	{NULL, NULL, NULL}
 };
 /* }}} */
@@ -368,12 +333,12 @@ YAF_STARTUP_FUNCTION(router) {
 	(void)yaf_route_route_arginfo; /* tricky, supress warning "defined but not used" */
 
 	YAF_INIT_CLASS_ENTRY(ce, "Yaf_Router", "Yaf\\Router", yaf_router_methods);
-	yaf_router_ce = zend_register_internal_class_ex(&ce, NULL, NULL TSRMLS_CC);
+	yaf_router_ce = zend_register_internal_class_ex(&ce, NULL);
 
-	yaf_router_ce->ce_flags |= ZEND_ACC_FINAL_CLASS;
+	yaf_router_ce->ce_flags |= ZEND_ACC_FINAL;
 
-	zend_declare_property_null(yaf_router_ce, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTERS), 		 ZEND_ACC_PROTECTED TSRMLS_CC);
-	zend_declare_property_null(yaf_router_ce, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_CURRENT_ROUTE), ZEND_ACC_PROTECTED TSRMLS_CC);
+	zend_declare_property_null(yaf_router_ce, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_ROUTES), 		 ZEND_ACC_PROTECTED);
+	zend_declare_property_null(yaf_router_ce, ZEND_STRL(YAF_ROUTER_PROPERTY_NAME_CURRENT_ROUTE), ZEND_ACC_PROTECTED);
 
 	YAF_STARTUP(route);
 	YAF_STARTUP(route_static);

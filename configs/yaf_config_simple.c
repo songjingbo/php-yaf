@@ -14,8 +14,6 @@
   +----------------------------------------------------------------------+
 */
 
-/* $Id: simple.c 329197 2013-01-18 05:55:37Z laruence $ */
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -32,7 +30,7 @@
 
 zend_class_entry *yaf_config_simple_ce;
 
-#ifdef HAVE_SPL
+#if defined(HAVE_SPL) && PHP_VERSION_ID < 70200
 extern PHPAPI zend_class_entry *spl_ce_Countable;
 #endif
 
@@ -68,39 +66,30 @@ ZEND_BEGIN_ARG_INFO_EX(yaf_config_simple_unset_arginfo, 0, 0, 1)
 ZEND_END_ARG_INFO()
 /* }}} */
 
-/** {{{ yaf_config_t * yaf_config_simple_instance(yaf_config_t *this_ptr, zval *values, zval *readonly TSRMLS_DC)
-*/
-yaf_config_t * yaf_config_simple_instance(yaf_config_t *this_ptr, zval *values, zval *readonly TSRMLS_DC) {
-	yaf_config_t *instance;
-
+yaf_config_t *yaf_config_simple_instance(yaf_config_t *this_ptr, zval *values, zval *readonly) /* {{{ */ {
 	switch (Z_TYPE_P(values)) {
 		case IS_ARRAY:
-			if (this_ptr) {
-				instance = this_ptr;
-			} else {
-				MAKE_STD_ZVAL(instance);
-				object_init_ex(instance, yaf_config_simple_ce);
+			if (Z_ISUNDEF_P(this_ptr)) {
+				object_init_ex(this_ptr, yaf_config_simple_ce);
 			}
-			zend_update_property(yaf_config_simple_ce, instance, ZEND_STRL(YAF_CONFIG_PROPERT_NAME), values TSRMLS_CC);
+			zend_update_property(yaf_config_simple_ce, this_ptr, ZEND_STRL(YAF_CONFIG_PROPERT_NAME), values);
 			if (readonly) {
 				convert_to_boolean(readonly);
-				zend_update_property_bool(yaf_config_simple_ce, instance, ZEND_STRL(YAF_CONFIG_PROPERT_NAME_READONLY), Z_BVAL_P(readonly) TSRMLS_CC);
+				zend_update_property_bool(yaf_config_simple_ce, this_ptr, ZEND_STRL(YAF_CONFIG_PROPERT_NAME_READONLY), 
+						Z_TYPE_P(readonly) == IS_TRUE ? 1 : 0);
 			}
-			return instance;
-		break;
+			return this_ptr;
 		default:
-			yaf_trigger_error(YAF_ERR_TYPE_ERROR TSRMLS_CC, "Invalid parameters provided, must be an array");
+			yaf_trigger_error(YAF_ERR_TYPE_ERROR, "Invalid parameters provided, must be an array");
 			return NULL;
 	}
 }
 /* }}} */
 
-/** {{{ zval * yaf_config_simple_format(yaf_config_t *instance, zval **ppzval TSRMLS_DC)
- */
-zval * yaf_config_simple_format(yaf_config_t *instance, zval **ppzval TSRMLS_DC) {
+zval *yaf_config_simple_format(yaf_config_t *instance, zval *pzval, zval *rv) /* {{{ */ {
 	zval *readonly, *ret;
-	readonly = zend_read_property(yaf_config_simple_ce, instance, ZEND_STRL(YAF_CONFIG_PROPERT_NAME_READONLY), 1 TSRMLS_CC);
-	ret = yaf_config_simple_instance(NULL, *ppzval, readonly TSRMLS_CC);
+	readonly = zend_read_property(yaf_config_simple_ce, instance, ZEND_STRL(YAF_CONFIG_PROPERT_NAME_READONLY), 1, NULL);
+	ret = yaf_config_simple_instance(rv, pzval, readonly);
 	return ret;
 }
 /* }}} */
@@ -110,53 +99,60 @@ zval * yaf_config_simple_format(yaf_config_t *instance, zval **ppzval TSRMLS_DC)
 PHP_METHOD(yaf_config_simple, __construct) {
 	zval *values, *readonly = NULL;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z|z", &values, &readonly) == FAILURE) {
-		zval *prop;
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "z|z", &values, &readonly) == FAILURE) {
+		zval prop;
 
-		MAKE_STD_ZVAL(prop);
-		array_init(prop);
-		zend_update_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), prop TSRMLS_CC);
+		array_init(&prop);
+		zend_update_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), &prop);
 		zval_ptr_dtor(&prop);
 
 		return;
 	}
 
-	(void)yaf_config_simple_instance(getThis(), values, readonly TSRMLS_CC);
+	(void)yaf_config_simple_instance(getThis(), values, readonly);
 }
 /** }}} */
 
 /** {{{ proto public Yaf_Config_Simple::get(string $name = NULL)
 */
 PHP_METHOD(yaf_config_simple, get) {
-	zval *ret, **ppzval;
-	char *name;
-	uint len = 0;
+	zval *ret, *pzval;
+	zend_string *name = NULL;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|s", &name, &len) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "|S", &name) == FAILURE) {
 		return;
 	}
 
-	if (!len) {
+	if (!name) {
 		RETURN_ZVAL(getThis(), 1, 0);
 	} else {
 		zval *properties;
 		HashTable *hash;
+		long lval;
+		double dval;
 
-		properties = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1 TSRMLS_CC);
+		properties = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1, NULL);
 		hash  = Z_ARRVAL_P(properties);
 
-		if (zend_hash_find(hash, name, len + 1, (void **) &ppzval) == FAILURE) {
-			RETURN_FALSE;
+		if (is_numeric_string(ZSTR_VAL(name), ZSTR_LEN(name), &lval, &dval, 0) != IS_LONG) {
+			if ((pzval = zend_hash_find(hash, name)) == NULL) {
+				RETURN_FALSE;
+			} 
+		} else {
+			if ((pzval = zend_hash_index_find(hash, lval)) == NULL) {
+				RETURN_FALSE;
+			} 
 		}
 
-		if (Z_TYPE_PP(ppzval) == IS_ARRAY) {
-			if ((ret = yaf_config_simple_format(getThis(), ppzval TSRMLS_CC))) {
+		if (Z_TYPE_P(pzval) == IS_ARRAY) {
+			zval rv = {{0}};
+			if ((ret = yaf_config_simple_format(getThis(), pzval, &rv))) {
 				RETURN_ZVAL(ret, 1, 1);
 			} else {
 				RETURN_NULL();
 			}
 		} else {
-			RETURN_ZVAL(*ppzval, 1, 0);
+			RETURN_ZVAL(pzval, 1, 0);
 		}
 	}
 
@@ -167,7 +163,7 @@ PHP_METHOD(yaf_config_simple, get) {
 /** {{{ proto public Yaf_Config_Simple::toArray(void)
 */
 PHP_METHOD(yaf_config_simple, toArray) {
-	zval *properties = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1 TSRMLS_CC);
+	zval *properties = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1, NULL);
 	RETURN_ZVAL(properties, 1, 0);
 }
 /* }}} */
@@ -175,26 +171,21 @@ PHP_METHOD(yaf_config_simple, toArray) {
 /** {{{ proto public Yaf_Config_Simple::set($name, $value)
 */
 PHP_METHOD(yaf_config_simple, set) {
-	zval *readonly = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME_READONLY), 1 TSRMLS_CC);
+	zval *readonly = zend_read_property(yaf_config_simple_ce,
+			getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME_READONLY), 1, NULL);
 
-	if (!Z_BVAL_P(readonly)) {
-		zval *name, *value, *props;
-		if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "zz", &name, &value) == FAILURE) {
+	if (Z_TYPE_P(readonly) == IS_FALSE) {
+		zend_string *name;
+		zval *value, *props;
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "Sz", &name, &value) == FAILURE) {
 			return;
 		}
 
-		if (Z_TYPE_P(name) != IS_STRING || !Z_STRLEN_P(name)) {
-			php_error_docref(NULL TSRMLS_CC, E_WARNING, "Expect a string key name");
-			RETURN_FALSE;
-		}
-
-		Z_ADDREF_P(value);
-		props = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1 TSRMLS_CC);
-		if (zend_hash_update(Z_ARRVAL_P(props), Z_STRVAL_P(name), Z_STRLEN_P(name) + 1, (void **)&value, sizeof(zval*), NULL) == SUCCESS) {
+		props = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1, NULL);
+		if (zend_hash_update(Z_ARRVAL_P(props), name, value) != NULL) {
+			Z_TRY_ADDREF_P(value);
 			RETURN_TRUE;
-		} else {
-			Z_DELREF_P(value);
-		}
+		} 
 	}
 
 	RETURN_FALSE;
@@ -204,13 +195,13 @@ PHP_METHOD(yaf_config_simple, set) {
 /** {{{ proto public Yaf_Config_Simple::__isset($name)
 */
 PHP_METHOD(yaf_config_simple, __isset) {
-	char *name;
-	uint len;
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &name, &len) == FAILURE) {
+	zend_string *name;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "S", &name) == FAILURE) {
 		return;
 	} else {
-		zval *prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1 TSRMLS_CC);
-		RETURN_BOOL(zend_hash_exists(Z_ARRVAL_P(prop), name, len + 1));
+		zval *prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1, NULL);
+		RETURN_BOOL(zend_hash_exists(Z_ARRVAL_P(prop), name));
 	}
 }
 /* }}} */
@@ -218,21 +209,21 @@ PHP_METHOD(yaf_config_simple, __isset) {
 /** {{{ proto public Yaf_Config_Simple::offsetUnset($index)
 */
 PHP_METHOD(yaf_config_simple, offsetUnset) {
-	zval *readonly = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME_READONLY), 1 TSRMLS_CC);
+	zval *readonly = zend_read_property(yaf_config_simple_ce,
+			getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME_READONLY), 1, NULL);
 
-	if (!Z_BVAL_P(readonly)) {
-		zval *name, *props;
-		if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &name) == FAILURE) {
+	if (Z_TYPE_P(readonly) == IS_FALSE) {
+		zval *props;
+		zend_string *name;
+		if (zend_parse_parameters(ZEND_NUM_ARGS(), "S", &name) == FAILURE) {
 			return;
 		}
 
-		if (Z_TYPE_P(name) != IS_STRING || Z_TYPE_P(name) != IS_STRING) {
-			php_error_docref(NULL TSRMLS_CC, E_WARNING, "Expect a string key name");
+		props = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1, NULL);
+		if (UNEXPECTED(Z_TYPE_P(props) != IS_ARRAY)) {
 			RETURN_FALSE;
 		}
-
-		props = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1 TSRMLS_CC);
-		if (zend_hash_del(Z_ARRVAL_P(props), Z_STRVAL_P(name), Z_STRLEN_P(name) + 1) == SUCCESS) {
+		if (zend_hash_del(Z_ARRVAL_P(props), name) == SUCCESS) {
 			RETURN_TRUE;
 		}
 	}
@@ -244,7 +235,7 @@ PHP_METHOD(yaf_config_simple, offsetUnset) {
 /** {{{ proto public Yaf_Config_Simple::count($name)
 */
 PHP_METHOD(yaf_config_simple, count) {
-	zval *prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1 TSRMLS_CC);
+	zval *prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1, NULL);
 	RETURN_LONG(zend_hash_num_elements(Z_ARRVAL_P(prop)));
 }
 /* }}} */
@@ -252,7 +243,7 @@ PHP_METHOD(yaf_config_simple, count) {
 /** {{{ proto public Yaf_Config_Simple::rewind(void)
 */
 PHP_METHOD(yaf_config_simple, rewind) {
-	zval *prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1 TSRMLS_CC);
+	zval *prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1, NULL);
 	zend_hash_internal_pointer_reset(Z_ARRVAL_P(prop));
 }
 /* }}} */
@@ -260,21 +251,22 @@ PHP_METHOD(yaf_config_simple, rewind) {
 /** {{{ proto public Yaf_Config_Simple::current(void)
 */
 PHP_METHOD(yaf_config_simple, current) {
-	zval *prop, **ppzval, *ret;
+	zval *prop, *pzval, *ret;
 
-	prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1 TSRMLS_CC);
-	if (zend_hash_get_current_data(Z_ARRVAL_P(prop), (void **)&ppzval) == FAILURE) {
+	prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1, NULL);
+	if ((pzval = zend_hash_get_current_data(Z_ARRVAL_P(prop))) == NULL) {
 		RETURN_FALSE;
 	}
 
-	if (Z_TYPE_PP(ppzval) == IS_ARRAY) {
-		if ((ret = yaf_config_simple_format(getThis(), ppzval TSRMLS_CC))) {
+	if (Z_TYPE_P(pzval) == IS_ARRAY) {
+		zval rv = {{0}};
+		if ((ret = yaf_config_simple_format(getThis(), pzval, &rv))) {
 			RETURN_ZVAL(ret, 1, 1);
 		} else {
 			RETURN_NULL();
 		}
 	} else {
-		RETURN_ZVAL(*ppzval, 1, 0);
+		RETURN_ZVAL(pzval, 1, 0);
 	}
 }
 /* }}} */
@@ -283,17 +275,17 @@ PHP_METHOD(yaf_config_simple, current) {
 */
 PHP_METHOD(yaf_config_simple, key) {
 	zval *prop;
-	char *string;
+	zend_string *string;
 	ulong index;
 
-	prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1 TSRMLS_CC);
-	zend_hash_get_current_key(Z_ARRVAL_P(prop), &string, &index, 0);
+	prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1, NULL);
+	zend_hash_get_current_key(Z_ARRVAL_P(prop), &string, &index);
 	switch(zend_hash_get_current_key_type(Z_ARRVAL_P(prop))) {
 		case HASH_KEY_IS_LONG:
 			RETURN_LONG(index);
 			break;
 		case HASH_KEY_IS_STRING:
-			RETURN_STRING(string, 1);
+			RETURN_STR(zend_string_copy(string));
 			break;
 		default:
 			RETURN_FALSE;
@@ -304,7 +296,7 @@ PHP_METHOD(yaf_config_simple, key) {
 /** {{{ proto public Yaf_Config_Simple::next(void)
 */
 PHP_METHOD(yaf_config_simple, next) {
-	zval *prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1 TSRMLS_CC);
+	zval *prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1, NULL);
 	zend_hash_move_forward(Z_ARRVAL_P(prop));
 	RETURN_TRUE;
 }
@@ -313,16 +305,17 @@ PHP_METHOD(yaf_config_simple, next) {
 /** {{{ proto public Yaf_Config_Simple::valid(void)
 */
 PHP_METHOD(yaf_config_simple, valid) {
-	zval *prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1 TSRMLS_CC);
-	RETURN_LONG(zend_hash_has_more_elements(Z_ARRVAL_P(prop)) == SUCCESS);
+	zval *prop = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME), 1, NULL);
+	RETURN_BOOL(zend_hash_has_more_elements(Z_ARRVAL_P(prop)) == SUCCESS);
 }
 /* }}} */
 
 /** {{{ proto public Yaf_Config_Simple::readonly(void)
 */
 PHP_METHOD(yaf_config_simple, readonly) {
-	zval *readonly = zend_read_property(yaf_config_simple_ce, getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME_READONLY), 1 TSRMLS_CC);
-	RETURN_BOOL(Z_LVAL_P(readonly));
+	zval *readonly = zend_read_property(yaf_config_simple_ce,
+			getThis(), ZEND_STRL(YAF_CONFIG_PROPERT_NAME_READONLY), 1, NULL);
+	RETURN_BOOL(Z_TYPE_P(readonly) == IS_TRUE);
 }
 /* }}} */
 
@@ -370,16 +363,18 @@ YAF_STARTUP_FUNCTION(config_simple) {
 	zend_class_entry ce;
 
 	YAF_INIT_CLASS_ENTRY(ce, "Yaf_Config_Simple", "Yaf\\Config\\Simple", yaf_config_simple_methods);
-	yaf_config_simple_ce = zend_register_internal_class_ex(&ce, yaf_config_ce, NULL TSRMLS_CC);
+	yaf_config_simple_ce = zend_register_internal_class_ex(&ce, yaf_config_ce);
 
-#ifdef HAVE_SPL
-	zend_class_implements(yaf_config_simple_ce TSRMLS_CC, 3, zend_ce_iterator, zend_ce_arrayaccess, spl_ce_Countable);
+#if defined(HAVE_SPL) && PHP_VERSION_ID < 70200
+	zend_class_implements(yaf_config_simple_ce, 3, zend_ce_iterator, zend_ce_arrayaccess, spl_ce_Countable);
+#elif PHP_VERSION_ID >= 70200
+	zend_class_implements(yaf_config_simple_ce, 3, zend_ce_iterator, zend_ce_arrayaccess, zend_ce_countable);
 #else
-	zend_class_implements(yaf_config_simple_ce TSRMLS_CC, 2, zend_ce_iterator, zend_ce_arrayaccess);
+	zend_class_implements(yaf_config_simple_ce, 2, zend_ce_iterator, zend_ce_arrayaccess);
 #endif
-	zend_declare_property_bool(yaf_config_simple_ce, ZEND_STRL(YAF_CONFIG_PROPERT_NAME_READONLY), 0, ZEND_ACC_PROTECTED TSRMLS_CC);
+	zend_declare_property_bool(yaf_config_simple_ce, ZEND_STRL(YAF_CONFIG_PROPERT_NAME_READONLY), 0, ZEND_ACC_PROTECTED);
 
-	yaf_config_simple_ce->ce_flags |= ZEND_ACC_FINAL_CLASS;
+	yaf_config_simple_ce->ce_flags |= ZEND_ACC_FINAL;
 
 	return SUCCESS;
 }

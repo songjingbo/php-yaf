@@ -13,7 +13,7 @@ final class Yaf_Application {
 	protected $_err_msg = "";
 
 	/* methods */
-	public function __construct($config, $envrion = NULL) {
+	public function __construct($config, $environ = NULL) {
 	}
 	public function run() {
 	}
@@ -909,7 +909,7 @@ final class Yaf_Route_Map implements Yaf_Route_Interface {
 
 	/* properties */
 	protected $_ctl_router = "";
-	protected $_delimeter = NULL;
+	protected $_delimiter = NULL;
 
 	/* methods */
 	public function __construct($controller_prefer = NULL, $delimiter = NULL) {

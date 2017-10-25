@@ -6,6 +6,7 @@ Check for Yaf_View_Simple recursive render error message outputing
 yaf.library="/php/global/dir"
 log_errors=0
 display_errors=1
+yaf.use_namespace=0
 --FILE--
 <?php
 require "build.inc";
@@ -31,7 +32,11 @@ file_put_contents($tpl2, <<<HTML
 HTML
 );
 
-echo $view->render($tpl, array('tpl' => $tpl2));
+try {
+	echo $view->render($tpl, array('tpl' => $tpl2));
+} catch (Error $e) {
+	echo $e->getMessage();
+}
 ?>
 --CLEAN--
 <?php
@@ -40,4 +45,4 @@ require "build.inc";
 shutdown();
 ?>
 --EXPECTF--
-Parse error: syntax error, unexpected '{' in %sfoo2.phtml on line %d
+syntax error, unexpected '}'

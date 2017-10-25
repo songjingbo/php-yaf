@@ -14,8 +14,6 @@
   +----------------------------------------------------------------------+
 */
 
-/* $Id: yaf_loader.h 329002 2013-01-07 12:55:53Z laruence $ */
-
 #ifndef YAF_LOADER_H
 #define YAF_LOADER_H
 
@@ -53,7 +51,6 @@
 #define	YAF_LOADER_PROPERTY_NAME_LIBRARY	"_library"
 #define YAF_LOADER_PROPERTY_NAME_GLOBAL_LIB "_global_library"
 
-#if ((PHP_MAJOR_VERSION == 5) && (PHP_MINOR_VERSION > 2)) || (PHP_MAJOR_VERSION > 5)
 #define YAF_STORE_EG_ENVIRON() \
 	{ \
 		zval ** __old_return_value_pp   = EG(return_value_ptr_ptr); \
@@ -66,33 +63,15 @@
 		EG(active_op_array)		 = __old_op_array; \
 	}
 
-#else
-
-#define YAF_STORE_EG_ENVIRON() \
-	{ \
-		zval ** __old_return_value_pp  		   = EG(return_value_ptr_ptr); \
-		zend_op ** __old_opline_ptr 		   = EG(opline_ptr); \
-		zend_op_array * __old_op_array 		   = EG(active_op_array); \
-		zend_function_state * __old_func_state = EG(function_state_ptr);
-
-#define YAF_RESTORE_EG_ENVIRON() \
-		EG(return_value_ptr_ptr) = __old_return_value_pp;\
-		EG(opline_ptr)			 = __old_opline_ptr; \
-		EG(active_op_array)		 = __old_op_array; \
-		EG(function_state_ptr)	 = __old_func_state; \
-	}
-
-#endif
-
 extern zend_class_entry *yaf_loader_ce;
 
-int yaf_internal_autoload(char *file_name, uint name_len, char **directory TSRMLS_DC);
-int yaf_loader_import(char *path, int len, int use_path TSRMLS_DC);
-int yaf_register_autoloader(yaf_loader_t *loader TSRMLS_DC);
-int yaf_loader_register_namespace_single(char *prefix, uint len TSRMLS_DC);
-yaf_loader_t * yaf_loader_instance(yaf_loader_t *this_ptr, char *library_path, char *global_path TSRMLS_DC);
+int yaf_internal_autoload(char *file_name, size_t name_len, char **directory);
+int yaf_loader_import(zend_string *path, int use_path);
+int yaf_register_autoloader(yaf_loader_t *loader);
+int yaf_loader_register_namespace_single(char *prefix, size_t len);
+yaf_loader_t *yaf_loader_instance(yaf_loader_t *this_ptr, zend_string *library_path, zend_string *global_path);
 
-extern PHPAPI int php_stream_open_for_zend_ex(const char *filename, zend_file_handle *handle, int mode TSRMLS_DC);
+extern PHPAPI int php_stream_open_for_zend_ex(const char *filename, zend_file_handle *handle, int mode);
 
 YAF_STARTUP_FUNCTION(loader);
 

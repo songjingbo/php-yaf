@@ -14,8 +14,6 @@
   +----------------------------------------------------------------------+
 */
 
-/* $Id: yaf_view.c 329200 2013-01-18 06:26:40Z laruence $ */
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -31,10 +29,10 @@
 #include "views/yaf_view_interface.h"
 #include "views/yaf_view_simple.h"
 
-/** {{{ yaf_view_t * yaf_view_instance(yaf_view_t *this_ptr TSRMLS_DC)
+/** {{{ yaf_view_t * yaf_view_instance(yaf_view_t *this_ptr)
 */
 #if 0
-yaf_view_t * yaf_view_instance(yaf_view_t *this_ptr TSRMLS_DC) {
+yaf_view_t * yaf_view_instance(yaf_view_t *this_ptr) {
 	yaf_view_t		*view	= NULL;
 	yaf_view_struct 	*p 		= yaf_buildin_views;
 
@@ -50,11 +48,11 @@ yaf_view_t * yaf_view_instance(yaf_view_t *this_ptr TSRMLS_DC) {
 	object_init_ex(view, *(yaf_current_view->ce));
 
 	if (yaf_current_view->init) {
-		yaf_current_view->init(view TSRMLS_CC);
+		yaf_current_view->init(view);
 	}
 	MAKE_STD_ZVAL(view);
 	object_init_ex(view, yaf_view_simple_ce);
-	yaf_view_simple_init(view TSRMLS_CC);
+	yaf_view_simple_init(view);
 
 	return view;
 }

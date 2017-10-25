@@ -14,8 +14,6 @@
   +----------------------------------------------------------------------+
 */
 
-/* $Id: php_yaf.h 329002 2013-01-07 12:55:53Z laruence $ */
-
 #ifndef PHP_YAF_H
 #define PHP_YAF_H
 
@@ -41,23 +39,13 @@ extern zend_module_entry yaf_module_entry;
 #define YAF_G(v) (yaf_globals.v)
 #endif
 
-#define YAF_VERSION 					"2.2.10-dev"
+#define PHP_YAF_VERSION 					"3.0.6-dev"
 
 #define YAF_STARTUP_FUNCTION(module)   	ZEND_MINIT_FUNCTION(yaf_##module)
 #define YAF_RINIT_FUNCTION(module)		ZEND_RINIT_FUNCTION(yaf_##module)
 #define YAF_STARTUP(module)	 		  	ZEND_MODULE_STARTUP_N(yaf_##module)(INIT_FUNC_ARGS_PASSTHRU)
-#define YAF_SHUTDOWN_FUNCTION(module)  	ZEND_MINIT_FUNCTION(yaf_##module)
+#define YAF_SHUTDOWN_FUNCTION(module)  	ZEND_MSHUTDOWN_FUNCTION(yaf_##module)
 #define YAF_SHUTDOWN(module)	 	    ZEND_MODULE_SHUTDOWN_N(yaf_##module)(INIT_FUNC_ARGS_PASSTHRU)
-
-#if ((PHP_MAJOR_VERSION == 5) && (PHP_MINOR_VERSION > 2)) || (PHP_MAJOR_VERSION > 5)
-#define YAF_HAVE_NAMESPACE
-#else
-#define Z_SET_REFCOUNT_P(pz, rc)      (pz)->refcount = rc
-#define Z_SET_REFCOUNT_PP(ppz, rc)    Z_SET_REFCOUNT_P(*(ppz), rc)
-#define Z_ADDREF_P 	 ZVAL_ADDREF
-#define Z_REFCOUNT_P ZVAL_REFCOUNT
-#define Z_DELREF_P 	 ZVAL_DELREF
-#endif
 
 #define yaf_application_t	zval
 #define yaf_view_t 			zval
@@ -75,31 +63,30 @@ extern zend_module_entry yaf_module_entry;
 #define yaf_session_t		zval
 #define yaf_exception_t		zval
 
-#define YAF_ME(c, m, a, f) {m, PHP_MN(c), a, (zend_uint) (sizeof(a)/sizeof(struct _zend_arg_info)-1), f},
+#define YAF_ME(c, m, a, f) {m, PHP_MN(c), a, (uint) (sizeof(a)/sizeof(struct _zend_arg_info)-1), f},
 
-extern PHPAPI void php_var_dump(zval **struc, int level TSRMLS_DC);
-extern PHPAPI void php_debug_zval_dump(zval **struc, int level TSRMLS_DC);
+extern PHPAPI void php_var_dump(zval **struc, int level);
+extern PHPAPI void php_debug_zval_dump(zval **struc, int level);
 
 ZEND_BEGIN_MODULE_GLOBALS(yaf)
-	char 		*ext;
-	char		*base_uri;
-	char 		*environ;
-	char 		*directory;
-	char 		*local_library;
-	char        *local_namespaces;
-	char 		*global_library;
-	char        *view_directory;
-	char 		*view_ext;
-	char 		*default_module;
-	char 		*default_controller;
-	char 		*default_action;
-	char 		*bootstrap;
-	char 		*name_separator;
-	long 		name_separator_len;
+	zend_string	*ext;
+	zend_string *base_uri;
+	zend_string *directory;
+	zend_string *local_library;
+	zend_string *local_namespaces;
+	zend_string *view_directory;
+	zend_string *view_ext;
+	zend_string *default_module;
+	zend_string *default_controller;
+	zend_string *default_action;
+	zend_string *bootstrap;
+	char         *global_library;
+    char         *environ_name;
+    char         *name_separator;
+    size_t        name_separator_len;
 	zend_bool 	lowcase_path;
 	zend_bool 	use_spl_autoload;
 	zend_bool 	throw_exception;
-	zend_bool 	cache_config;
 	zend_bool   action_prefer;
 	zend_bool	name_suffix;
 	zend_bool  	autoload_started;
@@ -112,19 +99,12 @@ ZEND_BEGIN_MODULE_GLOBALS(yaf)
 /* }}} */
 	long		forward_limit;
 	HashTable	*configs;
-	zval 		*modules;
+	zval 		 modules;
 	zval        *default_route;
-#if ((PHP_MAJOR_VERSION == 5) && (PHP_MINOR_VERSION < 4))
-	uint 		buf_nesting;
-	void		*buffer;
-	void 		*owrite_handler;
-#endif
-	zval        *active_ini_file_section;
+	zval        active_ini_file_section;
 	zval        *ini_wanted_section;
 	uint        parsing_flag;
-#ifdef YAF_HAVE_NAMESPACE
 	zend_bool	use_namespace;
-#endif
 ZEND_END_MODULE_GLOBALS(yaf)
 
 PHP_MINIT_FUNCTION(yaf);
@@ -136,6 +116,7 @@ PHP_MINFO_FUNCTION(yaf);
 extern ZEND_DECLARE_MODULE_GLOBALS(yaf);
 
 #endif
+
 /*
  * Local variables:
  * tab-width: 4

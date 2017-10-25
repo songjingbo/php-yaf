@@ -4,6 +4,7 @@ Check for Yaf_Response::setBody/prependBody/appendBody
 <?php if (!extension_loaded("yaf")) print "skip"; ?>
 --INI--
 yaf.library="/php/global/dir"
+yaf.use_namespace=0
 --FILE--
 <?php 
 $response = new Yaf_Response_Http();
@@ -25,6 +26,6 @@ Yaf_Response_Http Object
         )
 
     [_sendheader:protected] => 1
-    [_response_code:protected] => 200
+    [_response_code:protected] => 0
 )
 Hello World
